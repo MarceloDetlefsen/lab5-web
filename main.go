@@ -2,13 +2,16 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"fmt"
 	"log"
 	"net"
 	"strings"
+
+	_ "modernc.org/sqlite"
 )
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, db *sql.DB) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
@@ -34,6 +37,7 @@ func handleConnection(conn net.Conn) {
 
 	method := parts[0]
 	path := parts[1]
+	_ = path //En este momento no se usa el path
 
 	// Solo aceptar método GET
 	if method != "GET" {
@@ -41,14 +45,88 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	// Construir cuerpo HTML dinámico
-	body := fmt.Sprintf(`
+	rows, err := db.Query("SELECT id, name, current_episode, total_episodes FROM series")
+	if err != nil {
+		log.Printf("Database query error: %v", err)
+		sendError(conn, "500 Internal Server Error", "Database error")
+		return
+	}
+	defer rows.Close()
+
+	body := `
 	<html>
-		<body>
-			<h1>Hello! You requested: %s</h1>
-		</body>
+	<head>
+		<title>Control de Series</title>
+		<style>
+			body { font-family: Arial; background: #f4f4f4; padding: 40px; }
+			h1 { text-align: center; }
+			table {
+				margin: auto;
+				border-collapse: collapse;
+				width: 70%;
+				background: white;
+			}
+			p {
+				text-align: center;
+				font-style: italic;
+				color: #555;
+			}
+			th, td {
+				border: 1px solid #000000;
+				padding: 10px;
+				text-align: center;
+			}
+			th {
+				background: #ffb545;
+				color: white;
+			}
+			tr:nth-child(even) { background: #6ec8ff; }
+			tr:nth-child(odd) { background: #cae6ff; }
+		</style>
+	</head>
+	<body>
+	<h1>Control de Series</h1>
+	<p> ( No miro series :/ ) <br> Solo puse datos de series que conozco, pero no son mis estadisticas.</p>
+	<table>
+	<tr>
+		<th>ID</th>
+		<th>Serie</th>
+		<th>Episodio Actual</th>
+		<th>Total de Episodios</th>
+	</tr>
+	`
+
+	for rows.Next() {
+		var id int
+		var name string
+		var current int
+		var total int
+
+		err := rows.Scan(&id, &name, &current, &total)
+		if err != nil {
+			log.Printf("Scan error: %v", err)
+			continue
+		}
+
+		body += fmt.Sprintf(`
+		<tr>
+			<td>%d</td>
+			<td>%s</td>
+			<td>%d</td>
+			<td>%d</td>
+		</tr>
+		`, id, name, current, total)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Printf("Rows iteration error: %v", err)
+	}
+
+	body += `
+	</table>
+	</body>
 	</html>
-	`, path)
+	`
 
 	response := fmt.Sprintf(
 		"HTTP/1.1 200 OK\r\n"+
@@ -95,6 +173,12 @@ func sendError(conn net.Conn, status string, message string) {
 }
 
 func main() {
+	db, err := sql.Open("sqlite", "file:series.db")
+	if err != nil {
+		log.Fatalf("Error opening database: %v", err)
+	}
+	defer db.Close()
+
 	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
@@ -110,6 +194,6 @@ func main() {
 			continue
 		}
 
-		go handleConnection(conn)
+		go handleConnection(conn, db)
 	}
 }
