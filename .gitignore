@@ -1,0 +1,8 @@
+# Archivos que se crean en Mac
+.DS_Store
+
+# Archivos del editor VS Code
+.vscode
+
+# Cualquier tipo de archivo temporal
+.temp
