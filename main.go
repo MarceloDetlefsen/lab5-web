@@ -63,7 +63,7 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 			table {
 				margin: auto;
 				border-collapse: collapse;
-				width: 70%;
+				width: 80%;
 				background: white;
 			}
 			p {
@@ -82,6 +82,22 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 			}
 			tr:nth-child(even) { background: #6ec8ff; }
 			tr:nth-child(odd) { background: #cae6ff; }
+
+			.progress-container {
+				width: 100%;
+				background-color: #ddd;
+				border-radius: 10px;
+				overflow: hidden;
+			}
+
+			.progress-bar {
+				height: 20px;
+				background-color: #4CAF50;
+				text-align: center;
+				color: white;
+				line-height: 20px;
+				font-size: 12px;
+			}
 		</style>
 	</head>
 	<body>
@@ -93,6 +109,7 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 		<th>Serie</th>
 		<th>Episodio Actual</th>
 		<th>Total de Episodios</th>
+		<th>Progreso</th>
 	</tr>
 	`
 
@@ -108,14 +125,26 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 			continue
 		}
 
+		percent := 0
+		if total > 0 {
+			percent = (current * 100) / total
+		}
+
 		body += fmt.Sprintf(`
 		<tr>
 			<td>%d</td>
 			<td>%s</td>
 			<td>%d</td>
 			<td>%d</td>
+			<td>
+				<div class="progress-container">
+					<div class="progress-bar" style="width:%d%%;">
+						%d%%
+					</div>
+				</div>
+			</td>
 		</tr>
-		`, id, name, current, total)
+		`, id, name, current, total, percent, percent)
 	}
 
 	if err = rows.Err(); err != nil {
