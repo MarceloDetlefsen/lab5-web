@@ -59,6 +59,17 @@ func indexTemplate(tableRows string) string {
 			margin-bottom: 20px;
 			font-size: 16px;
 		}
+		.btn-next {
+			background: #ffb545;
+			color: white;
+			border: none;
+			padding: 6px 14px;
+			border-radius: 6px;
+			cursor: pointer;
+			font-size: 14px;
+		}
+		.btn-next:hover    { background: #e0a030; }
+		.btn-next:disabled { background: #aaa; cursor: default; }
 	</style>
 </head>
 <body>
@@ -71,11 +82,24 @@ func indexTemplate(tableRows string) string {
 			<th>Episodio Actual</th>
 			<th>Total de Episodios</th>
 			<th>Progreso</th>
+			<th>Registrar Episodio Visto</th>
 		</tr>
 		%s
 	</table>
 	<br>
 	<a class="add-link" href="/create">Agregar nueva serie</a>
+
+	<script>
+		async function nextEpisode(id, current, total) {
+			if (current >= total) return;
+			const response = await fetch("/update?id=" + id, { method: "POST" });
+			if (response.ok) {
+				location.reload();
+			} else {
+				alert("Error al actualizar el episodio");
+			}
+		}
+	</script>
 </body>
 </html>
 `, sharedCSS, tableRows)

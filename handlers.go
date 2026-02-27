@@ -35,7 +35,15 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 	}
 
 	method := parts[0]
-	path := parts[1]
+	rawPath := parts[1]
+
+	// Separar path de query string: /update?id=3 → route="/update", params="id=3"
+	pathParts := strings.SplitN(rawPath, "?", 2)
+	path := pathParts[0]
+	queryString := ""
+	if len(pathParts) > 1 {
+		queryString = pathParts[1]
+	}
 
 	// Leer headers
 	contentLength := 0
@@ -61,6 +69,9 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 
 	case method == "GET" && path == "/create":
 		handleCreateForm(conn)
+
+	case method == "POST" && path == "/update":
+		handleUpdate(conn, db, queryString)
 
 	case method == "POST" && path == "/create":
 		// Leer el body
@@ -108,6 +119,11 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 			percent = (current * 100) / total
 		}
 
+		disabled := ""
+		if current >= total {
+			disabled = "disabled"
+		}
+
 		tableRows += fmt.Sprintf(`
 		<tr>
 			<td>%d</td>
@@ -121,8 +137,11 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 					</div>
 				</div>
 			</td>
+			<td>
+				<button class="btn-next" onclick="nextEpisode(%d, %d, %d)" %s>+1</button>
+			</td>
 		</tr>
-		`, id, name, current, total, percent, percent)
+		`, id, name, current, total, percent, percent, id, current, total, disabled)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -169,6 +188,30 @@ func handleCreatePost(conn net.Conn, db *sql.DB, rawBody string) {
 
 	// POST/Redirect/GET
 	response := "HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n"
+	conn.Write([]byte(response))
+}
+
+func handleUpdate(conn net.Conn, db *sql.DB, queryString string) {
+	params, err := url.ParseQuery(queryString)
+	if err != nil || params.Get("id") == "" {
+		sendError(conn, "400 Bad Request", "Falta el parámetro id")
+		return
+	}
+
+	id := params.Get("id")
+	log.Printf("Actualizando episodio de serie id=%s", id)
+
+	_, err = db.Exec(
+		"UPDATE series SET current_episode = current_episode + 1 WHERE id = ? AND current_episode < total_episodes",
+		id,
+	)
+	if err != nil {
+		log.Printf("Error updating DB: %v", err)
+		sendError(conn, "500 Internal Server Error", "Error al actualizar la base de datos")
+		return
+	}
+
+	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
 	conn.Write([]byte(response))
 }
 
