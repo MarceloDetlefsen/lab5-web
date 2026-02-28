@@ -68,6 +68,11 @@ func indexTemplate(tableRows string) string {
 			cursor: pointer;
 			font-size: 14px;
 		}
+			tr.completed td {
+			background: #d4edda !important;
+			font-style: italic;
+			color: #555;
+		}
 		.btn-next:hover    { background: #e0a030; }
 		.btn-next:disabled { background: #aaa; cursor: default; }
 	</style>

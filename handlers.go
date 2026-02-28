@@ -119,13 +119,17 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 			percent = (current * 100) / total
 		}
 
-		disabled := ""
+		// Si la serie está completa, le ponemos clase CSS y ocultamos el botón
+		completedClass := ""
+		actionCell := fmt.Sprintf(`<button class="btn-next" onclick="nextEpisode(%d, %d, %d)">+1</button>`, id, current, total)
+
 		if current >= total {
-			disabled = "disabled"
+			completedClass = "completed"
+			actionCell = `Serie Completada!`
 		}
 
 		tableRows += fmt.Sprintf(`
-		<tr>
+		<tr class="%s">
 			<td>%d</td>
 			<td>%s</td>
 			<td>%d</td>
@@ -138,10 +142,10 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 				</div>
 			</td>
 			<td>
-				<button class="btn-next" onclick="nextEpisode(%d, %d, %d)" %s>+1</button>
+				%s
 			</td>
 		</tr>
-		`, id, name, current, total, percent, percent, id, current, total, disabled)
+		`, completedClass, id, name, current, total, percent, percent, actionCell)
 	}
 
 	if err = rows.Err(); err != nil {
