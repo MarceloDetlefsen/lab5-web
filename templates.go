@@ -104,6 +104,15 @@ func indexTemplate(tableRows string) string {
 				alert("Error al actualizar el episodio");
 			}
 		}
+		async function nextEpisodeMinus(id, current, total) {
+			if (current <= 0) return;
+			const response = await fetch("/update-minus?id=" + id, { method: "POST" });
+			if (response.ok) {
+				location.reload();
+			} else {
+				alert("Error al actualizar el episodio");
+			}
+		}
 	</script>
 </body>
 </html>

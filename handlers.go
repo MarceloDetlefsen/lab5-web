@@ -73,6 +73,9 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 	case method == "POST" && path == "/update":
 		handleUpdate(conn, db, queryString)
 
+	case method == "POST" && path == "/update-minus":
+		handleUpdateMinus(conn, db, queryString)
+
 	case method == "POST" && path == "/create":
 		// Leer el body
 		body := make([]byte, contentLength)
@@ -122,6 +125,7 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 		// Si la serie está completa, le ponemos clase CSS y ocultamos el botón
 		completedClass := ""
 		actionCell := fmt.Sprintf(`<button class="btn-next" onclick="nextEpisode(%d, %d, %d)">+1</button>`, id, current, total)
+		actionCellMinus := fmt.Sprintf(`<button class="btn-next" onclick="nextEpisodeMinus(%d, %d, %d)">-1</button>`, id, current, total)
 
 		if current >= total {
 			completedClass = "completed"
@@ -142,10 +146,10 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 				</div>
 			</td>
 			<td>
-				%s
+				%s %s
 			</td>
 		</tr>
-		`, completedClass, id, name, current, total, percent, percent, actionCell)
+		`, completedClass, id, name, current, total, percent, percent, actionCell, actionCellMinus)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -207,6 +211,30 @@ func handleUpdate(conn net.Conn, db *sql.DB, queryString string) {
 
 	_, err = db.Exec(
 		"UPDATE series SET current_episode = current_episode + 1 WHERE id = ? AND current_episode < total_episodes",
+		id,
+	)
+	if err != nil {
+		log.Printf("Error updating DB: %v", err)
+		sendError(conn, "500 Internal Server Error", "Error al actualizar la base de datos")
+		return
+	}
+
+	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
+	conn.Write([]byte(response))
+}
+
+func handleUpdateMinus(conn net.Conn, db *sql.DB, queryString string) {
+	params, err := url.ParseQuery(queryString)
+	if err != nil || params.Get("id") == "" {
+		sendError(conn, "400 Bad Request", "Falta el parámetro id")
+		return
+	}
+
+	id := params.Get("id")
+	log.Printf("Actualizando episodio de serie id=%s", id)
+
+	_, err = db.Exec(
+		"UPDATE series SET current_episode = current_episode - 1 WHERE id = ? AND current_episode > 0",
 		id,
 	)
 	if err != nil {
