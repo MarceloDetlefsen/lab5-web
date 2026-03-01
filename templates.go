@@ -87,13 +87,14 @@ func indexTemplate(tableRows string) string {
 			<th>Episodio Actual</th>
 			<th>Total de Episodios</th>
 			<th>Progreso</th>
-			<th>Registrar Episodio Visto</th>
+			<th>Alterar Progreso</th>
+			<th>Eliminar Serie</th>
 		</tr>
 		%s
 	</table>
 	<br>
 	<a class="add-link" href="/create">Agregar nueva serie</a>
-
+	
 	<script>
 		async function nextEpisode(id, current, total) {
 			if (current >= total) return;
@@ -111,6 +112,15 @@ func indexTemplate(tableRows string) string {
 				location.reload();
 			} else {
 				alert("Error al actualizar el episodio");
+			}
+		}
+		async function deleteSerie(id) {
+			if (!confirm('Eliminar esta serie?')) return;
+			const response = await fetch("/delete?id=" + id, { method: "DELETE" });
+			if (response.ok) {
+				location.reload();
+			} else {
+				alert("Error al eliminar");
 			}
 		}
 	</script>

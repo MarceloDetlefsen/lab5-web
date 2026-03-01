@@ -89,6 +89,9 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 		}
 		handleCreatePost(conn, db, string(body[:totalRead]))
 
+	case method == "DELETE" && path == "/delete":
+		handleDelete(conn, db, queryString)
+
 	default:
 		sendError(conn, "404 Not Found", "Page not found")
 	}
@@ -148,8 +151,9 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 			<td>
 				%s %s
 			</td>
+			<td><button class="btn-next" onclick="deleteSerie(%d)">Eliminar</button></td>
 		</tr>
-		`, completedClass, id, name, current, total, percent, percent, actionCell, actionCellMinus)
+		`, completedClass, id, name, current, total, percent, percent, actionCell, actionCellMinus, id)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -196,6 +200,27 @@ func handleCreatePost(conn net.Conn, db *sql.DB, rawBody string) {
 
 	// POST/Redirect/GET
 	response := "HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n"
+	conn.Write([]byte(response))
+}
+
+func handleDelete(conn net.Conn, db *sql.DB, queryString string) {
+	params, err := url.ParseQuery(queryString)
+	if err != nil || params.Get("id") == "" {
+		sendError(conn, "400 Bad Request", "Falta el parámetro id")
+		return
+	}
+
+	id := params.Get("id")
+	log.Printf("Eliminando serie id=%s", id)
+
+	_, err = db.Exec("DELETE FROM series WHERE id = ?", id)
+	if err != nil {
+		log.Printf("Error deleting from DB: %v", err)
+		sendError(conn, "500 Internal Server Error", "Error al eliminar de la base de datos")
+		return
+	}
+
+	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
 	conn.Write([]byte(response))
 }
 
