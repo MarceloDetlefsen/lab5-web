@@ -20,7 +20,7 @@ func indexTemplate(tableRows string) string {
 		table {
 			margin: auto;
 			border-collapse: collapse;
-			width: 80%%;
+			width: 90%%;
 			background: white;
 		}
 		p {
@@ -67,14 +67,21 @@ func indexTemplate(tableRows string) string {
 			border-radius: 6px;
 			cursor: pointer;
 			font-size: 14px;
+			margin: 2px;
 		}
-			tr.completed td {
+		.btn-next:hover    { background: #e0a030; }
+		.btn-next:disabled { background: #aaa; cursor: default; }
+		tr.completed td {
 			background: #d4edda !important;
 			font-style: italic;
 			color: #555;
 		}
-		.btn-next:hover    { background: #e0a030; }
-		.btn-next:disabled { background: #aaa; cursor: default; }
+		input[type="text"], input[type="number"] {
+			width: 90%%;
+			padding: 4px;
+			border: 1px solid #ffb545;
+			border-radius: 4px;
+		}
 	</style>
 </head>
 <body>
@@ -89,12 +96,13 @@ func indexTemplate(tableRows string) string {
 			<th>Progreso</th>
 			<th>Alterar Progreso</th>
 			<th>Eliminar Serie</th>
+			<th>Editar Serie</th>
 		</tr>
 		%s
 	</table>
 	<br>
 	<a class="add-link" href="/create">Agregar nueva serie</a>
-	
+
 	<script>
 		async function nextEpisode(id, current, total) {
 			if (current >= total) return;
@@ -105,6 +113,7 @@ func indexTemplate(tableRows string) string {
 				alert("Error al actualizar el episodio");
 			}
 		}
+
 		async function nextEpisodeMinus(id, current, total) {
 			if (current <= 0) return;
 			const response = await fetch("/update-minus?id=" + id, { method: "POST" });
@@ -114,13 +123,42 @@ func indexTemplate(tableRows string) string {
 				alert("Error al actualizar el episodio");
 			}
 		}
+
 		async function deleteSerie(id) {
-			if (!confirm('Eliminar esta serie?')) return;
+			if (!confirm('¿Eliminar esta serie?')) return;
 			const response = await fetch("/delete?id=" + id, { method: "DELETE" });
 			if (response.ok) {
 				location.reload();
 			} else {
 				alert("Error al eliminar");
+			}
+		}
+
+		function editSerie(id, name, current, total) {
+			const row = document.getElementById("row-" + id);
+			const tds = row.querySelectorAll("td");
+
+			tds[1].innerHTML = '<input id="edit-name-' + id + '" type="text" value="' + name + '">';
+			tds[2].innerHTML = '<input id="edit-current-' + id + '" type="number" value="' + current + '">';
+			tds[3].innerHTML = '<input id="edit-total-' + id + '" type="number" value="' + total + '">';
+			tds[7].innerHTML = '<button class="btn-next" onclick="saveEdit(' + id + ')">Guardar</button>';
+		}
+
+		async function saveEdit(id) {
+			const name    = document.getElementById("edit-name-" + id).value;
+			const current = document.getElementById("edit-current-" + id).value;
+			const total   = document.getElementById("edit-total-" + id).value;
+
+			const response = await fetch("/edit?id=" + id, {
+				method: "PUT",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: "series_name=" + encodeURIComponent(name) + "&current_episode=" + current + "&total_episodes=" + total
+			});
+
+			if (response.ok) {
+				location.reload();
+			} else {
+				alert("Error al guardar");
 			}
 		}
 	</script>

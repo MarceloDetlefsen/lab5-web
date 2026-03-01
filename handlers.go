@@ -37,7 +37,6 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 	method := parts[0]
 	rawPath := parts[1]
 
-	// Separar path de query string: /update?id=3 → route="/update", params="id=3"
 	pathParts := strings.SplitN(rawPath, "?", 2)
 	path := pathParts[0]
 	queryString := ""
@@ -54,12 +53,27 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 		}
 		line = strings.TrimSpace(line)
 		if line == "" {
-			break // fin de headers
+			break
 		}
 		if strings.HasPrefix(line, "Content-Length:") {
 			lengthStr := strings.TrimSpace(strings.TrimPrefix(line, "Content-Length:"))
 			contentLength, _ = strconv.Atoi(lengthStr)
 		}
+	}
+
+	// Leer body si hay contenido
+	rawBody := ""
+	if contentLength > 0 {
+		body := make([]byte, contentLength)
+		totalRead := 0
+		for totalRead < contentLength {
+			n, err := reader.Read(body[totalRead:])
+			totalRead += n
+			if err != nil {
+				break
+			}
+		}
+		rawBody = string(body[:totalRead])
 	}
 
 	// Routing
@@ -70,27 +84,20 @@ func handleConnection(conn net.Conn, db *sql.DB) {
 	case method == "GET" && path == "/create":
 		handleCreateForm(conn)
 
+	case method == "POST" && path == "/create":
+		handleCreatePost(conn, db, rawBody)
+
 	case method == "POST" && path == "/update":
 		handleUpdate(conn, db, queryString)
 
 	case method == "POST" && path == "/update-minus":
 		handleUpdateMinus(conn, db, queryString)
 
-	case method == "POST" && path == "/create":
-		// Leer el body
-		body := make([]byte, contentLength)
-		totalRead := 0
-		for totalRead < contentLength {
-			n, err := reader.Read(body[totalRead:])
-			totalRead += n
-			if err != nil {
-				break
-			}
-		}
-		handleCreatePost(conn, db, string(body[:totalRead]))
-
 	case method == "DELETE" && path == "/delete":
 		handleDelete(conn, db, queryString)
+
+	case method == "PUT" && path == "/edit":
+		handleEdit(conn, db, queryString, rawBody)
 
 	default:
 		sendError(conn, "404 Not Found", "Page not found")
@@ -106,7 +113,6 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	// Construir las filas de la tabla
 	tableRows := ""
 	for rows.Next() {
 		var id int
@@ -125,7 +131,6 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 			percent = (current * 100) / total
 		}
 
-		// Si la serie está completa, le ponemos clase CSS y ocultamos el botón
 		completedClass := ""
 		actionCell := fmt.Sprintf(`<button class="btn-next" onclick="nextEpisode(%d, %d, %d)">+1</button>`, id, current, total)
 		actionCellMinus := fmt.Sprintf(`<button class="btn-next" onclick="nextEpisodeMinus(%d, %d, %d)">-1</button>`, id, current, total)
@@ -136,7 +141,7 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 		}
 
 		tableRows += fmt.Sprintf(`
-		<tr class="%s">
+		<tr id="row-%d" class="%s">
 			<td>%d</td>
 			<td>%s</td>
 			<td>%d</td>
@@ -148,12 +153,11 @@ func handleIndex(conn net.Conn, db *sql.DB) {
 					</div>
 				</div>
 			</td>
-			<td>
-				%s %s
-			</td>
+			<td>%s %s</td>
 			<td><button class="btn-next" onclick="deleteSerie(%d)">Eliminar</button></td>
+			<td><button class="btn-next" onclick="editSerie(%d, '%s', %d, %d)">Editar</button></td>
 		</tr>
-		`, completedClass, id, name, current, total, percent, percent, actionCell, actionCellMinus, id)
+		`, id, completedClass, id, name, current, total, percent, percent, actionCell, actionCellMinus, id, id, name, current, total)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -198,29 +202,7 @@ func handleCreatePost(conn net.Conn, db *sql.DB, rawBody string) {
 		return
 	}
 
-	// POST/Redirect/GET
 	response := "HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n"
-	conn.Write([]byte(response))
-}
-
-func handleDelete(conn net.Conn, db *sql.DB, queryString string) {
-	params, err := url.ParseQuery(queryString)
-	if err != nil || params.Get("id") == "" {
-		sendError(conn, "400 Bad Request", "Falta el parámetro id")
-		return
-	}
-
-	id := params.Get("id")
-	log.Printf("Eliminando serie id=%s", id)
-
-	_, err = db.Exec("DELETE FROM series WHERE id = ?", id)
-	if err != nil {
-		log.Printf("Error deleting from DB: %v", err)
-		sendError(conn, "500 Internal Server Error", "Error al eliminar de la base de datos")
-		return
-	}
-
-	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
 	conn.Write([]byte(response))
 }
 
@@ -265,6 +247,69 @@ func handleUpdateMinus(conn net.Conn, db *sql.DB, queryString string) {
 	if err != nil {
 		log.Printf("Error updating DB: %v", err)
 		sendError(conn, "500 Internal Server Error", "Error al actualizar la base de datos")
+		return
+	}
+
+	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
+	conn.Write([]byte(response))
+}
+
+func handleDelete(conn net.Conn, db *sql.DB, queryString string) {
+	params, err := url.ParseQuery(queryString)
+	if err != nil || params.Get("id") == "" {
+		sendError(conn, "400 Bad Request", "Falta el parámetro id")
+		return
+	}
+
+	id := params.Get("id")
+	log.Printf("Eliminando serie id=%s", id)
+
+	_, err = db.Exec("DELETE FROM series WHERE id = ?", id)
+	if err != nil {
+		log.Printf("Error deleting from DB: %v", err)
+		sendError(conn, "500 Internal Server Error", "Error al eliminar de la base de datos")
+		return
+	}
+
+	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
+	conn.Write([]byte(response))
+}
+
+func handleEdit(conn net.Conn, db *sql.DB, queryString string, rawBody string) {
+	params, err := url.ParseQuery(queryString)
+	if err != nil || params.Get("id") == "" {
+		sendError(conn, "400 Bad Request", "Falta el parámetro id")
+		return
+	}
+
+	id := params.Get("id")
+	log.Printf("Editando serie id=%s", id)
+
+	values, err := url.ParseQuery(rawBody)
+	if err != nil {
+		log.Printf("Error parsing form body: %v", err)
+		sendError(conn, "400 Bad Request", "Invalid form data")
+		return
+	}
+
+	name := values.Get("series_name")
+	currentEp := values.Get("current_episode")
+	totalEps := values.Get("total_episodes")
+
+	log.Printf("Parsed -> name=%s, current=%s, total=%s", name, currentEp, totalEps)
+
+	if name == "" || currentEp == "" || totalEps == "" {
+		sendError(conn, "400 Bad Request", "Todos los campos son requeridos")
+		return
+	}
+
+	_, err = db.Exec(
+		"UPDATE series SET name = ?, current_episode = ?, total_episodes = ? WHERE id = ?",
+		name, currentEp, totalEps, id,
+	)
+	if err != nil {
+		log.Printf("Error updating DB: %v", err)
+		sendError(conn, "500 Internal Server Error", "Error al actualizar en la base de datos")
 		return
 	}
 
