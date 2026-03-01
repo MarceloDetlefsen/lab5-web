@@ -89,10 +89,10 @@ func indexTemplate(tableRows string) string {
 	<p>( No miro series :/ )<br>Solo puse datos de series que conozco, pero no son mis estadisticas.</p>
 	<table>
 		<tr>
-			<th>ID</th>
-			<th>Serie</th>
-			<th>Episodio Actual</th>
-			<th>Total de Episodios</th>
+			<th onclick="sortTable(0)" style="cursor:pointer">|ID|</th>
+			<th onclick="sortTable(1)" style="cursor:pointer">|Serie|</th>
+			<th onclick="sortTable(2)" style="cursor:pointer">|Episodio Actual|</th>
+			<th onclick="sortTable(3)" style="cursor:pointer">|Total de Episodios|</th>
 			<th>Progreso</th>
 			<th>Alterar Progreso</th>
 			<th>Eliminar Serie</th>
@@ -160,6 +160,30 @@ func indexTemplate(tableRows string) string {
 			} else {
 				alert("Error al guardar");
 			}
+		}
+
+		let sortAsc = true;
+
+		function sortTable(colIndex) {
+			const table = document.querySelector("table");
+			const rows = Array.from(table.querySelectorAll("tr:not(:first-child)"));
+
+			rows.sort((a, b) => {
+				const aVal = a.querySelectorAll("td")[colIndex].innerText.trim();
+				const bVal = b.querySelectorAll("td")[colIndex].innerText.trim();
+
+				const aNum = parseFloat(aVal);
+				const bNum = parseFloat(bVal);
+
+				// Si son números los compara como números, si no como texto
+				if (!isNaN(aNum) && !isNaN(bNum)) {
+					return sortAsc ? aNum - bNum : bNum - aNum;
+				}
+				return sortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+			});
+
+			sortAsc = !sortAsc;
+			rows.forEach(row => table.appendChild(row));
 		}
 	</script>
 </body>
